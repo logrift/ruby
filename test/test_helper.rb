@@ -5,15 +5,18 @@ require "socket"
 require "logrift"
 
 class RecordingClient
-  attr_reader :entries, :service
+  attr_reader :entries, :deliveries, :service
 
   def initialize
     @entries = []
+    @deliveries = 0
     @service = "test-app"
   end
 
   def deliver(json)
-    @entries << JSON.parse(json)
+    @deliveries += 1
+    parsed = JSON.parse(json)
+    @entries.concat(parsed.is_a?(Array) ? parsed : [parsed])
     true
   end
 end

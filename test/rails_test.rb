@@ -12,11 +12,16 @@ class RailsTest < Minitest::Test
     @logger = Logrift::RailsIntegration.logger(client: @client)
   end
 
+  def teardown
+    @logger.close
+  end
+
   def test_nested_tags_preserve_structured_fields_and_do_not_leak
     @logger.tagged("request-123") do
       @logger.tagged("job") { @logger.info(message: "done", status: 200) }
     end
     @logger.info("outside")
+    @logger.flush
     entry = @client.entries.first
     assert_equal "done", entry["message"]
     assert_equal 200, entry["attrs"]["status"]
@@ -27,16 +32,20 @@ class RailsTest < Minitest::Test
   def test_tags_without_a_block
     tagged = @logger.tagged("job")
     tagged.error(RuntimeError.new("boom"))
+    @logger.flush
     assert_equal "RuntimeError", @client.entries.last["attrs"]["exception"]
     assert_equal ["job"], @client.entries.last["attrs"]["tags"]
     @logger.info("outside")
+    @logger.flush
     refute @client.entries.last["attrs"].key?("tags")
   end
 
   def test_silencing_and_thread_local_levels
     @logger.silence { @logger.info("hidden"); @logger.error("visible") }
+    @logger.flush
     assert_equal ["visible"], @client.entries.map { |entry| entry["message"] }
     @logger.info("normal")
+    @logger.flush
     assert_equal "normal", @client.entries.last["message"]
   end
 
@@ -45,6 +54,7 @@ class RailsTest < Minitest::Test
       Thread.new { @logger.tagged("request-#{n}") { @logger.info("#{n}") } }
     end
     threads.each(&:join)
+    @logger.flush
     @client.entries.each { |entry| assert_equal ["request-#{entry['message']}"], entry["attrs"]["tags"] }
   end
 
@@ -82,7 +92,8 @@ class RailsTest < Minitest::Test
       ENTRIES = []
       class Logrift::Client
         def deliver(json)
-          ENTRIES << JSON.parse(json)
+          parsed = JSON.parse(json)
+          ENTRIES.concat(parsed.is_a?(Array) ? parsed : [parsed])
           true
         end
       end
@@ -108,6 +119,7 @@ class RailsTest < Minitest::Test
         Rack::MockRequest.env_for("/check", "HTTP_X_REQUEST_ID" => "request-123")
       )
       body.close if body.respond_to?(:close)
+      Rails.logger.flush
       puts JSON.generate(status: status, entries: ENTRIES)
     RUBY
     out, err, result = Open3.capture3(RbConfig.ruby, "-Ilib", "-e", script)
@@ -126,10 +138,12 @@ class RailsTest < Minitest::Test
       require "logrift/rails"
       client = Struct.new(:service, :entries).new("manual", [])
       def client.deliver(json)
-        entries << JSON.parse(json)
+        parsed = JSON.parse(json)
+        entries.concat(parsed.is_a?(Array) ? parsed : [parsed])
       end
       logger = Logrift::RailsIntegration.logger(client: client)
       logger.tagged("manual-tag") { logger.info("hello") }
+      logger.flush
       puts JSON.generate(client.entries)
     RUBY
     out, err, result = Open3.capture3(RbConfig.ruby, "-Ilib", "-e", script)

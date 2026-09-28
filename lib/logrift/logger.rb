@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "logger"
+require "logrift/batcher"
 
 module Logrift
   class Formatter < ::Logger::Formatter
@@ -32,38 +33,70 @@ module Logrift
 
   # Logger's log device catches write errors, so fail-open handling belongs here.
   class LogDevice
-    attr_reader :last_error
-
-    def initialize(client, on_error: nil)
+    def initialize(client, on_error: nil, batch: true, batch_size: Batcher::DEFAULT_BATCH_SIZE,
+                   flush_interval: Batcher::DEFAULT_FLUSH_INTERVAL, max_buffer: Batcher::DEFAULT_MAX_BUFFER)
       @client = client
       @on_error = on_error || ->(error) { $stderr.puts("logrift: #{error.message}") }
+      @last_error = nil
+      @batcher = if batch
+        Batcher.new(client, on_error: @on_error, batch_size: batch_size,
+                    flush_interval: flush_interval, max_buffer: max_buffer)
+      end
+    end
+
+    def last_error
+      @batcher ? @batcher.last_error : @last_error
     end
 
     def write(json)
-      @client.deliver(json)
-      @last_error = nil
+      if @batcher
+        @batcher.push(json)
+      else
+        @client.deliver(json)
+        @last_error = nil
+      end
       json.bytesize
     rescue Error => error
       @last_error = error
-      begin
-        @on_error.call(error)
-      rescue StandardError
-        $stderr.puts("logrift: error handler failed")
-      end
+      report(error)
       0
     end
 
-    def close; end
-    def flush; end
+    def close
+      @batcher&.close
+    end
+
+    def flush
+      @batcher&.flush
+    end
+
+    private
+
+    def report(error)
+      @on_error.call(error)
+    rescue StandardError
+      $stderr.puts("logrift: error handler failed")
+    end
   end
 
   class Logger < ::Logger
     attr_reader :client
 
-    def initialize(client: nil, level: ::Logger::INFO, on_error: nil, **options)
+    def initialize(client: nil, level: ::Logger::INFO, on_error: nil,
+                   batch: true, batch_size: Batcher::DEFAULT_BATCH_SIZE,
+                   flush_interval: Batcher::DEFAULT_FLUSH_INTERVAL,
+                   max_buffer: Batcher::DEFAULT_MAX_BUFFER, **options)
       @client = client || Client.new(**options)
-      super(LogDevice.new(@client, on_error: on_error), level: level)
+      @device = LogDevice.new(@client, on_error: on_error, batch: batch, batch_size: batch_size,
+                              flush_interval: flush_interval, max_buffer: max_buffer)
+      super(@device, level: level)
       self.formatter = Formatter.new(service: @client.service)
+    end
+
+    # Delivers buffered entries immediately instead of waiting for the next flush.
+    def flush
+      @device.flush
+      self
     end
   end
 end

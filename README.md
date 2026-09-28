@@ -59,6 +59,9 @@ config.logrift.service = "shop"
 config.logrift.open_timeout = 1
 config.logrift.read_timeout = 2
 config.logrift.write_timeout = 2
+config.logrift.batch_size = 1000
+config.logrift.flush_interval = 10
+config.logrift.max_buffer = 5000
 config.logrift.on_error = ->(error) { $stderr.puts(error.message) }
 ```
 
@@ -111,16 +114,27 @@ Empty batches return zero without making a request. The direct client raises
 
 ## Delivery behavior
 
-Each logger call sends one synchronous HTTP request. Connections use Ruby's TLS
-certificate verification, with 1 second connect and 2 second read/write timeouts
-by default. There are no automatic retries, background workers or persistent
+The `Logger` and Rails integration buffer formatted entries in memory and
+deliver them to the collector from a background thread, so logging does not
+block the caller on the network. A batch is sent every `flush_interval`
+(default 10 seconds) or as soon as `batch_size` entries (default 1000) are
+buffered. The buffer is bounded by `max_buffer` entries (default 5000); when it
+is full the oldest entries are dropped and counted in `dropped`. Buffered
+entries are flushed on `close` and at process exit, and a forked child discards
+entries inherited from the parent and starts its own worker. Pass `batch: false`
+to deliver each entry synchronously instead.
+
+The `Client` delivers each `ingest`/`log` call immediately. Connections use
+Ruby's TLS certificate verification, with 1 second connect and 2 second
+read/write timeouts by default. There are no automatic retries or persistent
 connections; the client can be shared across threads and used after a fork.
 
-Logger delivery errors are reported to stderr (or `on_error`) and the log entry
-is dropped so an unavailable collector does not raise into an application
-request. This is best-effort delivery, without disk buffering or a delivery
-guarantee. Requests still wait for delivery or a timeout; for high-volume workloads,
-use explicit client batches or a local log collector.
+Delivery is best-effort, without disk buffering or a delivery guarantee: entries
+can be delayed up to `flush_interval` and are lost if the process exits or the
+collector is unavailable before they are flushed. Logger delivery errors are
+reported to stderr (or `on_error`) and never raise into an application request.
+For high-volume workloads that need durability, use an explicit client batch or
+a local log collector.
 
 ## Development
 
