@@ -1,7 +1,7 @@
 # Logrift for Ruby
 
 Ruby client and Rails logger for [Logrift](https://github.com/logrift/server),
-the self-hosted log collector. Ruby 3.1+; Rails integration supports Rails 7.1+
+the self-hosted log collector. Ruby 3.1+; Rails integration supports Rails 7.2+
 and 8.x (with the Ruby version required by Rails).
 
 ## Install
@@ -66,7 +66,7 @@ An error handler must use a separate destination to avoid recursive logging.
 
 To configure a logger manually, use `Logrift::RailsIntegration.logger` from
 `require "logrift/rails"` with the same client options. To also retain local output,
-Rails 7.1+ provides `ActiveSupport::BroadcastLogger`:
+Rails 7.2+ provides `ActiveSupport::BroadcastLogger`:
 
 ```ruby
 remote = Logrift::RailsIntegration.logger(
@@ -130,8 +130,8 @@ bundle exec rake
 gem build logrift.gemspec
 ```
 
-CI tests Ruby 3.1/3.2 with Rails 7.1, Ruby 3.1/3.3 with Rails 7.2 and Ruby 3.4
-with Rails 8.0/8.1. Tests cover the HTTP wire protocol, batch ingestion, error
-handling, logger semantics, structured request tags and Rails integration.
+CI tests Ruby 3.1/3.3 with Rails 7.2 and Ruby 3.4 with Rails 8.0/8.1. Tests cover
+the HTTP wire protocol, batch ingestion, error handling, logger semantics,
+structured request tags and Rails integration.
 
 Licensed under MIT.
