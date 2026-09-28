@@ -1,0 +1,29 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '3.1'
+            rails: '~> 7.2.0'
+          - ruby: '3.3'
+            rails: '~> 7.2.0'
+          - ruby: '3.4'
+            rails: '~> 8.0.0'
+          - ruby: '3.4'
+            rails: '~> 8.1.0'
+    env:
+      RAILS_VERSION: ${{ matrix.rails }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bundle exec rake
+      - run: gem build logrift.gemspec
