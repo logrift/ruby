@@ -9,9 +9,9 @@ module Logrift
   # Delivery is best-effort: entries are held in memory until a flush and are
   # lost if the process exits before they are delivered.
   class Batcher
-    DEFAULT_BATCH_SIZE = 1000
-    DEFAULT_FLUSH_INTERVAL = 10
-    DEFAULT_MAX_BUFFER = 5000
+    DEFAULT_BATCH_SIZE = 5000
+    DEFAULT_FLUSH_INTERVAL = 30
+    DEFAULT_MAX_BUFFER = 20_000
 
     attr_reader :dropped, :last_error
 

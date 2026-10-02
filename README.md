@@ -59,9 +59,9 @@ config.logrift.service = "shop"
 config.logrift.open_timeout = 1
 config.logrift.read_timeout = 2
 config.logrift.write_timeout = 2
-config.logrift.batch_size = 1000
-config.logrift.flush_interval = 10
-config.logrift.max_buffer = 5000
+config.logrift.batch_size = 5000
+config.logrift.flush_interval = 30
+config.logrift.max_buffer = 20_000
 config.logrift.on_error = ->(error) { $stderr.puts(error.message) }
 ```
 
@@ -117,8 +117,8 @@ Empty batches return zero without making a request. The direct client raises
 The `Logger` and Rails integration buffer formatted entries in memory and
 deliver them to the collector from a background thread, so logging does not
 block the caller on the network. A batch is sent every `flush_interval`
-(default 10 seconds) or as soon as `batch_size` entries (default 1000) are
-buffered. The buffer is bounded by `max_buffer` entries (default 5000); when it
+(default 30 seconds) or as soon as `batch_size` entries (default 5000) are
+buffered. The buffer is bounded by `max_buffer` entries (default 20,000); when it
 is full the oldest entries are dropped and counted in `dropped`. Buffered
 entries are flushed on `close` and at process exit, and a forked child discards
 entries inherited from the parent and starts its own worker. Pass `batch: false`
